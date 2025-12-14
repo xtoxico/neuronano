@@ -1,12 +1,15 @@
 use reqwest::Client;
 use serde_json::{json, Value};
 use anyhow::{Result, anyhow};
+use log::{info, error, debug};
 
-const GEMINI_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+const GEMINI_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
 
 pub async fn request_gemini(api_key: String, current_code: String, filename: String, user_instruction: String) -> Result<String> {
     let client = Client::new();
     
+    info!("Preparing Gemini API request for file: {}", filename);
+
     let system_prompt = format!(
         "You are an intelligent text editor engine. I will provide a file named \"{}\" with the following content. The user wants to: \"{}\". RULES:
 
@@ -26,20 +29,33 @@ Preserve indentation.",
         }]
     });
 
-    let response = client.post(format!("{}?key={}", GEMINI_URL, api_key))
+    debug!("Payload: {}", body);
+
+    let url = format!("{}?key={}", GEMINI_URL, api_key);
+    info!("Sending request to Gemini Flash Latest...");
+
+    let response = client.post(&url)
         .json(&body)
         .send()
         .await?;
 
     if !response.status().is_success() {
-        return Err(anyhow!("Gemini API Error: {}", response.status()));
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        error!("API Error: Status {}, Body: {}", status, error_text);
+        return Err(anyhow!("Gemini API Error {}: {}", status, error_text));
     }
+
+    info!("Gemini API request successful.");
 
     let json_resp: Value = response.json().await?;
     
     let text = json_resp["candidates"][0]["content"]["parts"][0]["text"]
         .as_str()
-        .ok_or_else(|| anyhow!("Invalid API response structure"))?
+        .ok_or_else(|| {
+            error!("Invalid API response structure: {:?}", json_resp);
+            anyhow!("Invalid API response structure")
+        })?
         .to_string();
 
     Ok(clean_markdown(&text))

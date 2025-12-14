@@ -1,12 +1,18 @@
-use std::io;
-use anyhow::Result;
+use std::{io, time::Duration};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
-use std::time::Duration;
+use ratatui::{
+    backend::CrosstermBackend,
+    Terminal,
+};
+use anyhow::Result;
+use clap::Parser;
+use log::LevelFilter;
+use simplelog::{Config, WriteLogger};
+use std::fs::File;
 
 mod app;
 mod config;
@@ -17,8 +23,38 @@ use app::{App, AppMode};
 
 use tui_textarea::TextArea;
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    /// Optional file to open
+    filename: Option<String>,
+
+    /// Reset configuration (delete config.json)
+    #[arg(long)]
+    reset: bool,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Initialize logging
+    let _ = WriteLogger::init(
+        LevelFilter::Info,
+        Config::default(),
+        File::create("neuronano.log").unwrap_or_else(|_| File::create("/dev/null").unwrap()),
+    );
+
+    let cli = Cli::parse();
+
+    if cli.reset {
+        if std::fs::remove_file("config.json").is_ok() {
+            log::info!("Configuration reset: config.json deleted.");
+            println!("Configuration reset.");
+            return Ok(());
+        } else {
+            log::warn!("Failed to delete config.json (maybe it didn't exist).");
+        }
+    }
+
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -26,16 +62,8 @@ async fn main() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // Parse args
-    let args: Vec<String> = std::env::args().collect();
-    let filename = if args.len() > 1 {
-        Some(args[1].clone())
-    } else {
-        None
-    };
-
     // Create app
-    let mut app = App::new(filename);
+    let mut app = App::new(cli.filename);
 
     // Run app
     let res = run_app(&mut terminal, &mut app).await;
@@ -117,9 +145,11 @@ async fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mu
                                 let result = ai::request_gemini(api_key, current_code, filename, prompt).await;
                                 match result {
                                     Ok(content) => {
+                                        log::info!("Response received successfully.");
                                         let _ = tx.send(content).await;
                                     }
                                     Err(e) => {
+                                        log::error!("Gemini Request Failed: {}", e);
                                         let _ = tx.send(format!("Error: {}", e)).await;
                                     }
                                 }
