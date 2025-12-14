@@ -18,6 +18,20 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         .split(f.area());
 
     render_header(f, app, chunks[0]);
+
+    // Syntax Highlighting (MVP): Change border color based on language
+    let border_color = if let Some(lang) = app.detect_language() {
+        match lang.as_str() {
+            "Rust" => Color::LightRed, // Orange-ish
+            "JSON" => Color::Green,
+            "Markdown" => Color::Blue,
+            _ => Color::White,
+        }
+    } else {
+        Color::White
+    };
+
+    app.textarea.set_block(Block::default().borders(Borders::ALL).style(Style::default().fg(border_color)));
     f.render_widget(&app.textarea, chunks[1]);
     render_footer(f, app, chunks[2]);
 
@@ -155,7 +169,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
 
     let shortcuts = match app.mode {
         AppMode::Normal => Line::from(vec![
-            Span::styled("^Q", Style::default().add_modifier(Modifier::BOLD)),
+            Span::styled("^X", Style::default().add_modifier(Modifier::BOLD)),
             Span::raw(" Exit  "),
             Span::styled("^O", Style::default().add_modifier(Modifier::BOLD)),
             Span::raw(" Save  "),

@@ -1,6 +1,8 @@
 use tui_textarea::TextArea;
 use crate::config::Config;
 use tokio::sync::mpsc;
+use syntect::parsing::SyntaxSet;
+use syntect::highlighting::ThemeSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppMode {
@@ -27,6 +29,8 @@ pub struct App<'a> {
     pub ai_response_rx: Option<mpsc::Receiver<String>>,
     pub is_modified: bool,
     pub status_message: Option<String>,
+    pub syntax_set: SyntaxSet,
+    pub theme_set: ThemeSet,
 }
 
 use std::fs;
@@ -70,6 +74,11 @@ impl<'a> App<'a> {
             AppMode::Normal
         };
 
+
+
+        let syntax_set = SyntaxSet::load_defaults_newlines();
+        let theme_set = ThemeSet::load_defaults();
+
         let (tx, rx) = mpsc::channel(1);
 
         Self {
@@ -86,6 +95,8 @@ impl<'a> App<'a> {
             ai_response_rx: Some(rx),
             is_modified: false,
             status_message: None,
+            syntax_set,
+            theme_set,
         }
     }
 
@@ -162,5 +173,12 @@ impl<'a> App<'a> {
     pub fn mark_dirty(&mut self) {
         self.is_modified = true;
         self.status_message = None; // Clear status on edit
+    }
+
+    pub fn detect_language(&self) -> Option<String> {
+        if let Some(syntax) = self.syntax_set.find_syntax_for_file(&self.filename).ok().flatten() {
+            return Some(syntax.name.clone());
+        }
+        None
     }
 }

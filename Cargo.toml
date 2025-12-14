@@ -25,3 +25,4 @@ anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }
 log = "0.4"
 simplelog = "0.12"
+syntect = { version = "5.2", default-features = false, features = ["default-fancy"] }
