@@ -1,0 +1,24 @@
+[package]
+name = "neuronano"
+version = "0.1.0"
+edition = "2021"
+authors = ["Antonio Tirado Peña <xtoxico@gmail.com>"]
+license = "MIT"
+description = "Neural Network for Nano"
+
+[dependencies]
+# UI & Terminal
+ratatui = "0.29.0"
+crossterm = "0.28.1"
+tui-textarea = "0.7.0" # Manejo robusto de buffers de texto
+
+# Async & Runtime
+tokio = { version = "1.41.1", features = ["full"] }
+
+# AI & Networking (Preparado para la siguiente fase)
+reqwest = { version = "0.12.9", features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Utils
+anyhow = "1.0"
