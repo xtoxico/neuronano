@@ -29,7 +29,33 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         render_processing_popup(f);
     } else if app.mode == AppMode::Search {
         render_search_bar(f, app);
+    } else if app.mode == AppMode::SaveAs {
+        render_save_as_popup(f, app);
+    } else if app.mode == AppMode::ConfirmQuit {
+        render_confirm_quit_popup(f);
     }
+}
+
+fn render_save_as_popup(f: &mut Frame, app: &mut App) {
+    let area = centered_rect(50, 20, f.area());
+    f.render_widget(Clear, area);
+    f.render_widget(&app.filename_input, area);
+}
+
+fn render_confirm_quit_popup(f: &mut Frame) {
+    let area = centered_rect(40, 10, f.area());
+    f.render_widget(Clear, area);
+    
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Red).fg(Color::White))
+        .title(" Warning ");
+    
+    let text = Paragraph::new("⚠️  Unsaved Changes!\nSave before quitting?\n\n(Y)es / (N)o / (E)sc Cancel")
+        .alignment(ratatui::layout::Alignment::Center)
+        .block(block);
+        
+    f.render_widget(text, area);
 }
 
 fn render_setup_screen(f: &mut Frame, app: &mut App) {
@@ -94,9 +120,10 @@ fn render_search_bar(f: &mut Frame, app: &mut App) {
 
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
     let header_style = Style::default().fg(Color::Black).bg(Color::Cyan);
+    let modified_indicator = if app.is_modified { " [+]" } else { "" };
     let header_text = Line::from(vec![
         Span::styled("  NeuroNano  ", header_style.add_modifier(Modifier::BOLD)),
-        Span::styled(format!("  {}  ", app.filename), header_style),
+        Span::styled(format!("  {}{}", app.filename, modified_indicator), header_style),
     ]);
     
     let block = Block::default().style(header_style);
@@ -107,6 +134,25 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     let footer_style = Style::default().fg(Color::Black).bg(Color::White);
     
+    // Split footer into Status Message (Top) and Shortcuts (Bottom) if there is a message
+    let (msg_area, shortcuts_area) = if app.status_message.is_some() {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Length(1)])
+            .split(area);
+        (Some(chunks[0]), chunks[1])
+    } else {
+        (None, area)
+    };
+
+    if let Some(area) = msg_area {
+        if let Some(msg) = &app.status_message {
+            let msg_style = Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD);
+            let paragraph = Paragraph::new(Span::styled(format!(" {} ", msg), msg_style));
+            f.render_widget(paragraph, area);
+        }
+    }
+
     let shortcuts = match app.mode {
         AppMode::Normal => Line::from(vec![
             Span::styled("^Q", Style::default().add_modifier(Modifier::BOLD)),
@@ -143,11 +189,25 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
             Span::raw(" Find  "),
         ]),
+        AppMode::SaveAs => Line::from(vec![
+            Span::styled("Esc", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" Cancel  "),
+            Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" Save  "),
+        ]),
+        AppMode::ConfirmQuit => Line::from(vec![
+            Span::styled("Y", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" Yes  "),
+            Span::styled("N", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" No  "),
+            Span::styled("Esc", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" Cancel  "),
+        ]),
     };
 
     let block = Block::default().style(footer_style);
     let paragraph = Paragraph::new(shortcuts).block(block);
-    f.render_widget(paragraph, area);
+    f.render_widget(paragraph, shortcuts_area);
 }
 
 fn render_ai_popup(f: &mut Frame, app: &mut App) {

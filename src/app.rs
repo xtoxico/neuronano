@@ -9,6 +9,8 @@ pub enum AppMode {
     Setup,
     Processing,
     Search,
+    SaveAs,
+    ConfirmQuit,
 }
 
 pub struct App<'a> {
@@ -16,12 +18,15 @@ pub struct App<'a> {
     pub prompt_textarea: TextArea<'a>,
     pub setup_textarea: TextArea<'a>,
     pub search_textarea: TextArea<'a>,
+    pub filename_input: TextArea<'a>,
     pub should_quit: bool,
     pub mode: AppMode,
     pub filename: String,
     pub config: Config,
     pub ai_response_tx: mpsc::Sender<String>,
     pub ai_response_rx: Option<mpsc::Receiver<String>>,
+    pub is_modified: bool,
+    pub status_message: Option<String>,
 }
 
 use std::fs;
@@ -54,6 +59,10 @@ impl<'a> App<'a> {
         search_textarea.set_placeholder_text("Search...");
         search_textarea.set_block(ratatui::widgets::Block::default().borders(ratatui::widgets::Borders::ALL).title(" Search "));
 
+        let mut filename_input = TextArea::default();
+        filename_input.set_placeholder_text("Enter filename...");
+        filename_input.set_block(ratatui::widgets::Block::default().borders(ratatui::widgets::Borders::ALL).title(" Save As "));
+
         let config = Config::load().unwrap_or(Config::default());
         let mode = if config.api_key.is_empty() {
             AppMode::Setup
@@ -68,12 +77,15 @@ impl<'a> App<'a> {
             prompt_textarea,
             setup_textarea,
             search_textarea,
+            filename_input,
             should_quit: false,
             mode,
             filename: filename.unwrap_or_else(|| String::from("[No Name]")),
             config,
             ai_response_tx: tx,
             ai_response_rx: Some(rx),
+            is_modified: false,
+            status_message: None,
         }
     }
 
@@ -117,5 +129,38 @@ impl<'a> App<'a> {
     pub fn exit_search_mode(&mut self) {
         self.mode = AppMode::Normal;
         // Clear search text on exit? Maybe keep it for next time.
+    }
+
+    pub fn save_file(&mut self) -> anyhow::Result<()> {
+        if self.filename == "[No Name]" || self.filename.is_empty() {
+            return Err(anyhow::anyhow!("No filename specified"));
+        }
+
+        let content = self.textarea.lines().join("\n");
+        fs::write(&self.filename, content)?;
+        
+        self.is_modified = false;
+        self.set_status("File Saved!");
+        Ok(())
+    }
+
+    pub fn set_status(&mut self, msg: &str) {
+        self.status_message = Some(msg.to_string());
+    }
+
+    pub fn prompt_save_as(&mut self) {
+        self.mode = AppMode::SaveAs;
+        // Pre-fill with current filename if it's not [No Name]
+        if self.filename != "[No Name]" {
+            self.filename_input = TextArea::from(vec![self.filename.clone()]);
+        } else {
+             self.filename_input = TextArea::default();
+        }
+        self.filename_input.set_block(ratatui::widgets::Block::default().borders(ratatui::widgets::Borders::ALL).title(" Save As "));
+    }
+
+    pub fn mark_dirty(&mut self) {
+        self.is_modified = true;
+        self.status_message = None; // Clear status on edit
     }
 }

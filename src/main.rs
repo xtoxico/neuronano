@@ -101,31 +101,39 @@ async fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mu
                 match app.mode {
                     AppMode::Normal => match (key.code, key.modifiers) {
                         (KeyCode::Char('q'), KeyModifiers::CONTROL) => {
-                            app.quit();
+                            if app.is_modified {
+                                app.mode = AppMode::ConfirmQuit;
+                            } else {
+                                app.quit();
+                            }
                         }
                         (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
                             app.enter_prompt_mode();
                         }
                         (KeyCode::Char('k'), KeyModifiers::CONTROL) => {
                             app.textarea.cut();
+                            app.mark_dirty();
                         }
                         (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
                             app.textarea.paste();
+                            app.mark_dirty();
                         }
                         (KeyCode::Char('o'), KeyModifiers::CONTROL) => {
                             if app.filename != "[No Name]" {
-                                let content = app.textarea.lines().join("\n");
-                                if let Err(e) = std::fs::write(&app.filename, content) {
-                                    // In a real app, show error in UI
-                                    eprintln!("Error saving file: {}", e);
+                                if let Err(e) = app.save_file() {
+                                    app.set_status(&format!("Error: {}", e));
                                 }
+                            } else {
+                                app.prompt_save_as();
                             }
                         }
                         (KeyCode::Char('f'), KeyModifiers::CONTROL) => {
                             app.enter_search_mode();
                         }
                         _ => {
-                            app.textarea.input(key);
+                            if app.textarea.input(key) {
+                                app.mark_dirty();
+                            }
                         }
                     },
                     AppMode::Prompting => match key.code {
@@ -194,6 +202,47 @@ async fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mu
                         _ => {
                             app.search_textarea.input(key);
                         }
+                    },
+                    AppMode::SaveAs => match key.code {
+                        KeyCode::Esc => {
+                            app.mode = AppMode::Normal;
+                        }
+                        KeyCode::Enter => {
+                            if let Some(name) = app.filename_input.lines().first() {
+                                if !name.trim().is_empty() {
+                                    app.filename = name.trim().to_string();
+                                    if let Err(e) = app.save_file() {
+                                        app.set_status(&format!("Error: {}", e));
+                                    }
+                                    app.mode = AppMode::Normal;
+                                }
+                            }
+                        }
+                        _ => {
+                            app.filename_input.input(key);
+                        }
+                    },
+                    AppMode::ConfirmQuit => match key.code {
+                        KeyCode::Char('y') | KeyCode::Char('Y') => {
+                            // Try to save first
+                            if app.filename == "[No Name]" {
+                                app.prompt_save_as();
+                            } else {
+                                if let Err(e) = app.save_file() {
+                                    app.set_status(&format!("Error saving: {}", e));
+                                    app.mode = AppMode::Normal; // Go back to fix
+                                } else {
+                                    app.quit();
+                                }
+                            }
+                        }
+                        KeyCode::Char('n') | KeyCode::Char('N') => {
+                            app.quit(); // Quit without saving
+                        }
+                        KeyCode::Esc => {
+                            app.mode = AppMode::Normal;
+                        }
+                        _ => {}
                     }
                 }
             }
