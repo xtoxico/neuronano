@@ -27,6 +27,8 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         render_setup_screen(f, app);
     } else if app.mode == AppMode::Processing {
         render_processing_popup(f);
+    } else if app.mode == AppMode::Search {
+        render_search_bar(f, app);
     }
 }
 
@@ -76,6 +78,20 @@ fn render_processing_popup(f: &mut Frame) {
     f.render_widget(text, area);
 }
 
+fn render_search_bar(f: &mut Frame, app: &mut App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(3), // Search bar
+            Constraint::Length(2), // Footer
+        ])
+        .split(f.area());
+
+    // We render the search bar just above the footer
+    f.render_widget(&app.search_textarea, chunks[1]);
+}
+
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
     let header_style = Style::default().fg(Color::Black).bg(Color::Cyan);
     let header_text = Line::from(vec![
@@ -95,6 +111,14 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
         AppMode::Normal => Line::from(vec![
             Span::styled("^Q", Style::default().add_modifier(Modifier::BOLD)),
             Span::raw(" Exit  "),
+            Span::styled("^O", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" Save  "),
+            Span::styled("^K", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" Cut  "),
+            Span::styled("^U", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" Paste  "),
+            Span::styled("^F", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" Search  "),
             Span::styled("^P", Style::default().add_modifier(Modifier::BOLD)),
             Span::raw(" AI Prompt  "),
         ]),
@@ -112,6 +136,12 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
         ]),
         AppMode::Processing => Line::from(vec![
             Span::raw(" Processing... Please wait. "),
+        ]),
+        AppMode::Search => Line::from(vec![
+            Span::styled("Esc", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" Cancel  "),
+            Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" Find  "),
         ]),
     };
 

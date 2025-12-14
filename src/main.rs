@@ -26,8 +26,16 @@ async fn main() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    // Parse args
+    let args: Vec<String> = std::env::args().collect();
+    let filename = if args.len() > 1 {
+        Some(args[1].clone())
+    } else {
+        None
+    };
+
     // Create app
-    let mut app = App::new();
+    let mut app = App::new(filename);
 
     // Run app
     let res = run_app(&mut terminal, &mut app).await;
@@ -69,6 +77,24 @@ async fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mu
                         }
                         (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
                             app.enter_prompt_mode();
+                        }
+                        (KeyCode::Char('k'), KeyModifiers::CONTROL) => {
+                            app.textarea.cut();
+                        }
+                        (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
+                            app.textarea.paste();
+                        }
+                        (KeyCode::Char('o'), KeyModifiers::CONTROL) => {
+                            if app.filename != "[No Name]" {
+                                let content = app.textarea.lines().join("\n");
+                                if let Err(e) = std::fs::write(&app.filename, content) {
+                                    // In a real app, show error in UI
+                                    eprintln!("Error saving file: {}", e);
+                                }
+                            }
+                        }
+                        (KeyCode::Char('f'), KeyModifiers::CONTROL) => {
+                            app.enter_search_mode();
                         }
                         _ => {
                             app.textarea.input(key);
@@ -117,6 +143,26 @@ async fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mu
                             if key.modifiers.contains(KeyModifiers::CONTROL) {
                                 app.quit();
                             }
+                        }
+                    },
+                    AppMode::Search => match key.code {
+                        KeyCode::Esc => app.exit_search_mode(),
+                        KeyCode::Enter => {
+                            if let Some(query) = app.search_textarea.lines().first() {
+                                let query = query.to_string();
+                                // Simple linear search
+                                let lines = app.textarea.lines();
+                                for (i, line) in lines.iter().enumerate() {
+                                    if let Some(col) = line.find(&query) {
+                                        app.textarea.move_cursor(tui_textarea::CursorMove::Jump(i as u16, col as u16));
+                                        break;
+                                    }
+                                }
+                            }
+                            app.exit_search_mode();
+                        }
+                        _ => {
+                            app.search_textarea.input(key);
                         }
                     }
                 }

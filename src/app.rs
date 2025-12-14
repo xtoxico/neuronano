@@ -8,12 +8,14 @@ pub enum AppMode {
     Prompting,
     Setup,
     Processing,
+    Search,
 }
 
 pub struct App<'a> {
     pub textarea: TextArea<'a>,
     pub prompt_textarea: TextArea<'a>,
     pub setup_textarea: TextArea<'a>,
+    pub search_textarea: TextArea<'a>,
     pub should_quit: bool,
     pub mode: AppMode,
     pub filename: String,
@@ -22,16 +24,35 @@ pub struct App<'a> {
     pub ai_response_rx: Option<mpsc::Receiver<String>>,
 }
 
+use std::fs;
+
 impl<'a> App<'a> {
-    pub fn new() -> Self {
-        let mut textarea = TextArea::default();
-        textarea.set_line_number_style(ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray));
+    pub fn new(filename: Option<String>) -> Self {
+        let textarea = if let Some(ref file) = filename {
+            if let Ok(content) = fs::read_to_string(file) {
+                let mut textarea = TextArea::from(content.lines().map(|s| s.to_string()));
+                textarea.set_line_number_style(ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray));
+                textarea
+            } else {
+                let mut textarea = TextArea::default();
+                textarea.set_line_number_style(ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray));
+                textarea
+            }
+        } else {
+            let mut textarea = TextArea::default();
+            textarea.set_line_number_style(ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray));
+            textarea
+        };
         
         let mut prompt_textarea = TextArea::default();
         prompt_textarea.set_placeholder_text("Describe your wish (e.g., 'Refactor this function')...");
 
         let mut setup_textarea = TextArea::default();
         setup_textarea.set_placeholder_text("Paste your Google Gemini API Key here...");
+
+        let mut search_textarea = TextArea::default();
+        search_textarea.set_placeholder_text("Search...");
+        search_textarea.set_block(ratatui::widgets::Block::default().borders(ratatui::widgets::Borders::ALL).title(" Search "));
 
         let config = Config::load().unwrap_or(Config::default());
         let mode = if config.api_key.is_empty() {
@@ -46,9 +67,10 @@ impl<'a> App<'a> {
             textarea,
             prompt_textarea,
             setup_textarea,
+            search_textarea,
             should_quit: false,
             mode,
-            filename: String::from("[No Name]"),
+            filename: filename.unwrap_or_else(|| String::from("[No Name]")),
             config,
             ai_response_tx: tx,
             ai_response_rx: Some(rx),
@@ -86,5 +108,14 @@ impl<'a> App<'a> {
         } else {
             self.mode = AppMode::Normal;
         }
+    }
+
+    pub fn enter_search_mode(&mut self) {
+        self.mode = AppMode::Search;
+    }
+
+    pub fn exit_search_mode(&mut self) {
+        self.mode = AppMode::Normal;
+        // Clear search text on exit? Maybe keep it for next time.
     }
 }
